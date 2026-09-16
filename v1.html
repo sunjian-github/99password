@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0">
+<meta name="theme-color" content="#2c3e50">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>99password · v1 · 确定性密码生成器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#f5f6fa;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;-webkit-font-smoothing:antialiased}
+.container{background:#fff;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);width:100%;max-width:420px;overflow:hidden;border:1px solid #e8ecf1}
+.header{background:#7f8c8d;padding:32px 24px 28px;text-align:center}
+.logo{font-size:32px;font-weight:700;color:#fff;letter-spacing:1px;font-family:"SF Mono","Fira Code","Consolas","Courier New",monospace}
+.logo-sub{font-size:12px;color:rgba(255,255,255,0.6);margin-top:6px;letter-spacing:0.5px}
+.badge{display:inline-block;margin-top:8px;padding:3px 10px;border-radius:4px;background:rgba(0,0,0,0.15);color:rgba(255,255,255,0.8);font-size:11px;letter-spacing:0.5px}
+.form{padding:28px 24px 20px}
+.field{margin-bottom:20px}
+.field label{display:block;font-size:13px;color:#555;margin-bottom:6px;font-weight:600}
+.field input{width:100%;height:46px;border:1px solid #dcdfe6;border-radius:8px;padding:0 14px;font-size:15px;outline:none;transition:border-color .2s;background:#fff}
+.field input:focus{border-color:#7f8c8d}
+.field input::placeholder{color:#c0c4cc}
+.result-area{padding:0 24px 20px}
+.result-box{background:#fafbfc;border:1px solid #e8ecf1;border-radius:10px;padding:14px 16px;min-height:56px;display:none;align-items:center;gap:10px}
+.result-box.show{display:flex}
+.result-box .pwd{flex:1;font-family:"SF Mono","Fira Code","Consolas","Courier New",monospace;font-size:16px;color:#2c3e50;word-break:break-all;line-height:1.5}
+.result-box .pwd.masked{color:#aaa}
+.btn-group{display:flex;gap:6px;flex-shrink:0}
+.btn-icon{width:36px;height:36px;border:1px solid #dcdfe6;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;background:#fff}
+.btn-icon:active{transform:scale(0.95)}
+.btn-eye{color:#555}
+.btn-eye:hover{border-color:#2c3e50;color:#2c3e50}
+.btn-copy{background:#2c3e50;color:#fff;border-color:#2c3e50}
+.btn-copy:hover{background:#34495e}
+.btn-copy.copied{background:#27ae60;border-color:#27ae60}
+.btn-icon svg{width:18px;height:18px;fill:currentColor}
+.links{padding:0 24px 24px;text-align:center}
+.links a{font-size:12px;color:#95a5a6;text-decoration:none;margin:0 8px}
+.links a:hover{color:#2c3e50;text-decoration:underline}
+.tip{text-align:center;padding:0 24px 20px;font-size:12px;color:#bdc3c7;line-height:1.6}
+.footer{text-align:center;padding:18px;font-size:11px;color:#bdc3c7;line-height:1.8}
+.footer a{color:#95a5a6;text-decoration:none}
+.footer a:hover{color:#2c3e50;text-decoration:underline}
+@media(max-width:360px){
+  .header{padding:24px 16px 22px}
+  .logo{font-size:28px}
+  .form{padding:20px 16px 16px}
+  .result-area{padding:0 16px 16px}
+  .result-box .pwd{font-size:14px}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="logo">99password</div>
+    <div class="logo-sub">Deterministic Password Generator</div>
+    <div class="badge">v1 · HMAC-MD5 · 旧版</div>
+  </div>
+  <div class="form">
+    <div class="field">
+      <label>记忆密码</label>
+      <input id="masterPwd" type="password" placeholder="你的主密码" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>区分代号</label>
+      <input id="siteKey" type="text" placeholder="如 taobao、github" autocomplete="off">
+    </div>
+  </div>
+  <div class="result-area">
+    <div class="result-box" id="resultBox">
+      <span class="pwd masked" id="pwdText">输入记忆密码和区分代号</span>
+      <div class="btn-group">
+        <button class="btn-icon btn-eye" id="btnEye" title="显示/隐藏" disabled>
+          <svg id="eyeIcon" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+        </button>
+        <button class="btn-icon btn-copy" id="btnCopy" title="复制" disabled>
+          <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="tip">此为旧版，推荐使用 <a href="/" style="color:#95a5a6">v2 Argon2id 版</a></div>
+  <div class="links">
+    <a href="/">v2 新版</a>
+    <a href="/about">技术说明</a>
+  </div>
+</div>
+
+<div class="footer">
+  <p>Copyright © 2026 99password · <a href="https://flowerpassword.com" target="_blank">致敬花密 FlowerPassword</a></p>
+  <p>Hosted by <a href="https://www.cloudflare.com" target="_blank">Cloudflare Pages</a></p>
+</div>
+
+<script>
+var MD5 = function() {
+  function safe_add(x, y) { var lsw = (x & 0xFFFF) + (y & 0xFFFF); var msw = (x >> 16) + (y >> 16) + (lsw >> 16); return (msw << 16) | (lsw & 0xFFFF); }
+  function bit_rol(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); }
+  function md5_cmn(q, a, b, x, s, t) { return safe_add(bit_rol(safe_add(safe_add(a, q), safe_add(x, t)), s), b); }
+  function md5_ff(a, b, c, d, x, s, t) { return md5_cmn((b & c) | ((~b) & d), a, b, x, s, t); }
+  function md5_gg(a, b, c, d, x, s, t) { return md5_cmn((b & d) | (c & (~d)), a, b, x, s, t); }
+  function md5_hh(a, b, c, d, x, s, t) { return md5_cmn(b ^ c ^ d, a, b, x, s, t); }
+  function md5_ii(a, b, c, d, x, s, t) { return md5_cmn(c ^ (b | (~d)), a, b, x, s, t); }
+  function core_md5(x, len) {
+    x[len >> 5] |= 0x80 << ((len) % 32);
+    x[14 + ((len + 64) >>> 9 << 4)] = len;
+    var a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
+    for (var i = 0; i < x.length; i += 16) {
+      var olda = a, oldb = b, oldc = c, oldd = d;
+      a = md5_ff(a, b, c, d, x[i], 7, -680876936); d = md5_ff(d, a, b, c, x[i+1], 12, -389564586);
+      c = md5_ff(c, d, a, b, x[i+2], 17, 606105819); b = md5_ff(b, c, d, a, x[i+3], 22, -1044525330);
+      a = md5_ff(a, b, c, d, x[i+4], 7, -176418897); d = md5_ff(d, a, b, c, x[i+5], 12, 1200080426);
+      c = md5_ff(c, d, a, b, x[i+6], 17, -1473231341); b = md5_ff(b, c, d, a, x[i+7], 22, -45705983);
+      a = md5_ff(a, b, c, d, x[i+8], 7, 1770035416); d = md5_ff(d, a, b, c, x[i+9], 12, -1958414417);
+      c = md5_ff(c, d, a, b, x[i+10], 17, -42063); b = md5_ff(b, c, d, a, x[i+11], 22, -1990404162);
+      a = md5_ff(a, b, c, d, x[i+12], 7, 1804603682); d = md5_ff(d, a, b, c, x[i+13], 12, -40341101);
+      c = md5_ff(c, d, a, b, x[i+14], 17, -1502002290); b = md5_ff(b, c, d, a, x[i+15], 22, 1236535329);
+      a = md5_gg(a, b, c, d, x[i+1], 5, -165796510); d = md5_gg(d, a, b, c, x[i+6], 9, -1069501632);
+      c = md5_gg(c, d, a, b, x[i+11], 14, 643717713); b = md5_gg(b, c, d, a, x[i], 20, -373897302);
+      a = md5_gg(a, b, c, d, x[i+5], 5, -701558691); d = md5_gg(d, a, b, c, x[i+10], 9, 38016083);
+      c = md5_gg(c, d, a, b, x[i+15], 14, -660478335); b = md5_gg(b, c, d, a, x[i+4], 20, -405537848);
+      a = md5_gg(a, b, c, d, x[i+9], 5, 568446438); d = md5_gg(d, a, b, c, x[i+14], 9, -1019803690);
+      c = md5_gg(c, d, a, b, x[i+3], 14, -187363961); b = md5_gg(b, c, d, a, x[i+8], 20, 1163531501);
+      a = md5_gg(a, b, c, d, x[i+13], 5, -1444681467); d = md5_gg(d, a, b, c, x[i+2], 9, -51403784);
+      c = md5_gg(c, d, a, b, x[i+7], 14, 1735328473); b = md5_gg(b, c, d, a, x[i+12], 20, -1926607734);
+      a = md5_hh(a, b, c, d, x[i+5], 4, -378558); d = md5_hh(d, a, b, c, x[i+8], 11, -2022574463);
+      c = md5_hh(c, d, a, b, x[i+11], 16, 1839030562); b = md5_hh(b, c, d, a, x[i+14], 23, -35309556);
+      a = md5_hh(a, b, c, d, x[i+1], 4, -1530992060); d = md5_hh(d, a, b, c, x[i+4], 11, 1272893353);
+      c = md5_hh(c, d, a, b, x[i+7], 16, -155497632); b = md5_hh(b, c, d, a, x[i+10], 23, -1094730640);
+      a = md5_hh(a, b, c, d, x[i+13], 4, 681279174); d = md5_hh(d, a, b, c, x[i], 11, -358537222);
+      c = md5_hh(c, d, a, b, x[i+3], 16, -722521979); b = md5_hh(b, c, d, a, x[i+6], 23, 76029189);
+      a = md5_hh(a, b, c, d, x[i+9], 4, -640364487); d = md5_hh(d, a, b, c, x[i+12], 11, -421815835);
+      c = md5_hh(c, d, a, b, x[i+15], 16, 530742520); b = md5_hh(b, c, d, a, x[i+2], 23, -995338651);
+      a = md5_ii(a, b, c, d, x[i], 6, -198630844); d = md5_ii(d, a, b, c, x[i+7], 10, 1126891415);
+      c = md5_ii(c, d, a, b, x[i+14], 15, -1416354905); b = md5_ii(b, c, d, a, x[i+5], 21, -57434055);
+      a = md5_ii(a, b, c, d, x[i+12], 6, 1700485571); d = md5_ii(d, a, b, c, x[i+3], 10, -1894986606);
+      c = md5_ii(c, d, a, b, x[i+10], 15, -1051523); b = md5_ii(b, c, d, a, x[i+1], 21, -2054922799);
+      a = md5_ii(a, b, c, d, x[i+8], 6, 1873313359); d = md5_ii(d, a, b, c, x[i+15], 10, -30611744);
+      c = md5_ii(c, d, a, b, x[i+6], 15, -1560198380); b = md5_ii(b, c, d, a, x[i+13], 21, 1309151649);
+      a = md5_ii(a, b, c, d, x[i+4], 6, -145523070); d = md5_ii(d, a, b, c, x[i+11], 10, -1120210379);
+      c = md5_ii(c, d, a, b, x[i+2], 15, 718787259); b = md5_ii(b, c, d, a, x[i+9], 21, -343485551);
+      a = safe_add(a, olda); b = safe_add(b, oldb); c = safe_add(c, oldc); d = safe_add(d, oldd);
+    }
+    return [a, b, c, d];
+  }
+  function str2binl(str) { var output = []; var mask = (1 << 8) - 1; for (var i = 0; i < str.length * 8; i += 8) output[i >> 5] |= (str.charCodeAt(i / 8) & mask) << (i % 32); return output; }
+  function binl2hex(binarray) { var hex_tab = '0123456789abcdef'; var str = ''; for (var i = 0; i < binarray.length * 4; i++) str += hex_tab.charAt((binarray[i >> 2] >> ((i % 4) * 8 + 4)) & 0xF) + hex_tab.charAt((binarray[i >> 2] >> ((i % 4) * 8)) & 0xF); return str; }
+  function str2utf8(str) { return unescape(encodeURIComponent(str)); }
+  function hmac_md5(hmacKey, message) {
+    var bkey = str2binl(str2utf8(hmacKey));
+    var ipad = [], opad = [];
+    for (var i = 0; i < 16; i++) { ipad[i] = bkey[i] ^ 0x36363636; opad[i] = bkey[i] ^ 0x5C5C5C5C; }
+    var hash = core_md5(ipad.concat(str2binl(str2utf8(message))), 512 + message.length * 8);
+    return binl2hex(core_md5(opad.concat(hash), 512 + 128));
+  }
+  return function(password, key) { return hmac_md5(key, password); };
+}();
+
+function getLastPassword(m, k) {
+  if (!m || !k) return '';
+  var n = MD5(m, k), snowR = MD5(n, 'snow'), kiseR = MD5(n, 'kise');
+  var u = snowR.split(''), o = kiseR.split('');
+  for (var c = 0; c <= 31; c++) if (isNaN(parseInt(u[c]))) { if ('sunlovesnow1990090127xykab'.indexOf(o[c]) > -1) u[c] = u[c].toUpperCase(); }
+  var a = u.join(''), s = a.charAt(0);
+  return isNaN(parseInt(s)) ? a.substring(0, 16) : 'K' + a.substring(1, 16);
+}
+
+var masterInput = document.getElementById('masterPwd');
+var siteInput = document.getElementById('siteKey');
+var resultBox = document.getElementById('resultBox');
+var pwdText = document.getElementById('pwdText');
+var btnEye = document.getElementById('btnEye');
+var btnCopy = document.getElementById('btnCopy');
+var eyeIcon = document.getElementById('eyeIcon');
+var passwordVisible = false, currentPassword = '';
+
+var EYE_OPEN = '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>';
+var EYE_CLOSED = '<path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>';
+
+function maskPassword(pwd) {
+  if (pwd.length <= 4) return '\u2022'.repeat(pwd.length);
+  return pwd.substring(0, 3) + '\u2022'.repeat(pwd.length - 6) + pwd.substring(pwd.length - 3);
+}
+
+function updatePassword() {
+  var m = masterInput.value, k = siteInput.value;
+  currentPassword = getLastPassword(m, k);
+  if (currentPassword) {
+    resultBox.classList.add('show');
+    pwdText.textContent = passwordVisible ? currentPassword : maskPassword(currentPassword);
+    pwdText.classList.toggle('masked', !passwordVisible);
+    btnEye.disabled = false;
+    btnCopy.disabled = false;
+  } else {
+    resultBox.classList.remove('show');
+    btnEye.disabled = true;
+    btnCopy.disabled = true;
+  }
+}
+
+masterInput.addEventListener('input', updatePassword);
+siteInput.addEventListener('input', updatePassword);
+
+btnEye.addEventListener('click', function() {
+  passwordVisible = !passwordVisible;
+  eyeIcon.innerHTML = passwordVisible ? EYE_CLOSED : EYE_OPEN;
+  if (currentPassword) {
+    pwdText.textContent = passwordVisible ? currentPassword : maskPassword(currentPassword);
+    pwdText.classList.toggle('masked', !passwordVisible);
+  }
+});
+
+btnCopy.addEventListener('click', function() {
+  if (!currentPassword) return;
+  navigator.clipboard.writeText(currentPassword).then(function() {
+    btnCopy.classList.add('copied');
+    btnCopy.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+    setTimeout(function() {
+      btnCopy.classList.remove('copied');
+      btnCopy.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+    }, 1500);
+  });
+});
+</script>
+</body>
+</html>

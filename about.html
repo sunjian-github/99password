@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2c3e50">
+<title>99password · 加密原理与技术说明</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:#f5f6fa;color:#333;line-height:1.8;-webkit-font-smoothing:antialiased}
+.topbar{background:#2c3e50;padding:16px 20px;position:sticky;top:0;z-index:10}
+.topbar a{color:rgba(255,255,255,0.8);text-decoration:none;font-size:14px}
+.topbar a:hover{color:#fff}
+.topbar a::before{content:"← ";font-size:12px}
+.content{max-width:720px;margin:0 auto;padding:32px 20px 60px}
+h1{font-size:24px;color:#2c3e50;margin-bottom:8px;font-weight:700}
+.subtitle{font-size:14px;color:#95a5a6;margin-bottom:36px}
+h2{font-size:18px;color:#2c3e50;margin:36px 0 16px;padding-bottom:8px;border-bottom:1px solid #e8ecf1;font-weight:700}
+h3{font-size:15px;color:#34495e;margin:20px 0 10px;font-weight:600}
+p{margin-bottom:14px;font-size:14px;color:#444}
+ul,ol{margin:0 0 14px 20px;font-size:14px;color:#444}
+li{margin-bottom:6px}
+code{background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:13px;font-family:"SF Mono","Fira Code","Consolas",monospace;color:#c0392b}
+pre{background:#2c3e50;color:#ecf0f1;padding:16px;border-radius:8px;overflow-x:auto;margin-bottom:16px;font-size:13px;line-height:1.6}
+pre code{background:none;color:inherit;padding:0}
+table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}
+th{background:#f8f9fa;padding:10px 12px;text-align:left;font-weight:600;border:1px solid #e8ecf1;color:#2c3e50}
+td{padding:10px 12px;border:1px solid #e8ecf1;color:#444}
+tr:nth-child(even){background:#fafbfc}
+.highlight{background:#fff3cd;padding:14px 16px;border-radius:8px;border-left:4px solid #f39c12;margin-bottom:16px;font-size:13px}
+.card{background:#fff;border:1px solid #e8ecf1;border-radius:10px;padding:20px;margin-bottom:16px}
+.card-title{font-weight:700;color:#2c3e50;margin-bottom:8px;font-size:15px}
+.footer{text-align:center;padding:24px;font-size:11px;color:#bdc3c7;border-top:1px solid #e8ecf1;margin-top:40px}
+.footer a{color:#95a5a6;text-decoration:none}
+.flow{text-align:center;margin:20px 0;font-size:14px;color:#555}
+.flow .arrow{display:block;color:#bdc3c7;font-size:12px;margin:4px 0}
+.flow .box{display:inline-block;background:#ecf0f1;padding:6px 14px;border-radius:6px;font-family:"SF Mono","Fira Code","Consolas",monospace;font-size:13px}
+.flow .box.blue{background:#ebf5fb;color:#2980b9}
+.flow .box.green{background:#eafaf1;color:#27ae60}
+@media(max-width:600px){
+  .content{padding:24px 16px 48px}
+  h1{font-size:20px}
+  h2{font-size:16px}
+  table{font-size:12px}
+  th,td{padding:8px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar"><a href="/">返回 99password</a></div>
+
+<div class="content">
+
+<h1>99password 技术说明</h1>
+<p class="subtitle">加密原理 · 安全设计 · 与同类工具对比</p>
+
+<!-- ==================== 原理 ==================== -->
+<h2 id="principle">一、工作原理</h2>
+
+<p>99password 是一个<strong>确定性密码生成器</strong>（Deterministic Password Generator）。核心思想：</p>
+
+<div class="highlight">
+<strong>记住一个主密码，配合不同的站点标识，为每个网站生成唯一的强密码。</strong><br>
+无需数据库，无需云端同步——同样的输入永远产出同样的输出。
+</div>
+
+<h3>1.1 计算流程</h3>
+
+<div class="flow">
+<span class="box">主密码 (Master Password)</span>
+<span class="arrow">+</span>
+<span class="box">站点标识 (如 taobao)</span>
+<span class="arrow">↓ Argon2id 派生</span>
+<span class="box blue">32 字节哈希值</span>
+<span class="arrow">↓ 拒绝采样映射</span>
+<span class="box green">20 位强密码</span>
+</div>
+
+<h3>1.2 具体步骤</h3>
+
+<ol>
+<li><strong>构造 Salt</strong>：<code>salt = "flowerpassword-v2:" + 站点标识</code></li>
+<li><strong>Argon2id 派生</strong>：以主密码为输入、上述 Salt 为盐，执行 Argon2id 运算，输出 32 字节</li>
+<li><strong>字符映射</strong>：将 32 字节通过拒绝采样映射到 70 字符的字符集，取前 20 位作为最终密码</li>
+</ol>
+
+<pre><code>// 伪代码
+salt    = "flowerpassword-v2:" + siteKey
+hash    = Argon2id(password=masterPwd, salt=salt, mem=64MB, iter=3)
+password = bytesToChars(hash, length=20)</code></pre>
+
+<!-- ==================== Argon2id ==================== -->
+<h2 id="argon2id">二、为什么是 Argon2id</h2>
+
+<p>Argon2 是 2015 年密码哈希竞赛（PHC）的冠军算法，被 IETF 标准化为 <strong>RFC 9106</strong>。Argon2id 是其推荐的混合变体。</p>
+
+<h3>2.1 三个变体</h3>
+<table>
+<tr><th>变体</th><th>抗 GPU</th><th>抗侧信道</th><th>推荐场景</th></tr>
+<tr><td>Argon2d</td><td>强</td><td>弱</td><td>纯服务端、无侧信道风险</td></tr>
+<tr><td>Argon2i</td><td>弱</td><td>强</td><td>有侧信道风险的环境</td></tr>
+<tr><td><strong>Argon2id</strong></td><td><strong>强</strong></td><td><strong>强</strong></td><td><strong>通用首选</strong></td></tr>
+</table>
+
+<h3>2.2 核心安全特性</h3>
+
+<div class="card">
+<div class="card-title">内存硬函数（Memory-Hard Function）</div>
+<p>Argon2id 要求 64 MB 内存才能完成一次计算。这意味着：</p>
+<ul>
+<li><strong>GPU 攻击成本极高</strong>：显卡显存有限，无法大规模并行</li>
+<li><strong>ASIC 攻击不划算</strong>：定制芯片需要大量片上存储器，成本飙升</li>
+<li><strong>暴力破解不现实</strong>：每次尝试都需要 64MB 内存 + 3 轮迭代</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">数据独立寻址（Data-Independent Addressing）</div>
+<p>Argon2id 的前半程使用 Argon2i 模式（访问模式不依赖数据），后半程使用 Argon2d 模式（依赖数据）。混合设计同时抵抗 GPU 和侧信道攻击。</p>
+</div>
+
+<!-- ==================== 参数 ==================== -->
+<h2 id="params">三、参数选择</h2>
+
+<table>
+<tr><th>参数</th><th>值</th><th>说明</th></tr>
+<tr><td>memorySize</td><td>65536 KB (64 MB)</td><td>每次计算占用的内存，越大越抗 GPU</td></tr>
+<tr><td>iterations</td><td>3</td><td>迭代轮数，增加计算时间</td></tr>
+<tr><td>parallelism</td><td>1</td><td>并行度，浏览器单线程用 1 即可</td></tr>
+<tr><td>hashLength</td><td>32 字节</td><td>原始哈希输出长度</td></tr>
+<tr><td>outputLength</td><td>20 字符</td><td>最终密码长度</td></tr>
+<tr><td>charset</td><td>70 字符</td><td>大小写 + 数字 + 8 个符号，去掉易混淆 0O1lI</td></tr>
+</table>
+
+<div class="highlight">
+<strong>熵估算</strong>：20 位 × log₂(70) ≈ <strong>123 bit</strong><br>
+作为对比，AES-128 的密钥空间是 128 bit。123 bit 的密码强度已接近 AES-128，暴力破解需要 2¹²³ 次尝试。
+</div>
+
+<h3>3.1 性能参考</h3>
+<table>
+<tr><th>设备</th><th>耗时</th></tr>
+<tr><td>MacBook M1</td><td>~120 ms</td></tr>
+<tr><td>iPhone 13</td><td>~200 ms</td></tr>
+<tr><td>中端安卓</td><td>~350 ms</td></tr>
+<tr><td>普通笔记本</td><td>~500 ms</td></tr>
+</table>
+
+<!-- ==================== 对比 ==================== -->
+<h2 id="advantages">四、为什么选 99password</h2>
+
+<h3>4.1 与密码管理器对比</h3>
+
+<table>
+<tr><th></th><th>99password</th><th>1Password / Bitwarden</th></tr>
+<tr><td>存储方式</td><td>无存储，算法派生</td><td>加密数据库</td></tr>
+<tr><td>云端同步</td><td>不需要</td><td>依赖云服务</td></tr>
+<tr><td>单点故障</td><td>主密码泄露 → 全部泄露</td><td>主密码泄露 → 全部泄露</td></tr>
+<tr><td>数据丢失风险</td><td>无（无需备份）</td><td>有（数据库损坏/丢失）</td></tr>
+<tr><td>跨设备</td><td>任意设备，无需安装</td><td>需要客户端/浏览器插件</td></tr>
+<tr><td>离线使用</td><td>完全离线</td><td>首次需联网同步</td></tr>
+<tr><td>信任依赖</td><td>信任算法（公开标准）</td><td>信任软件厂商</td></tr>
+<tr><td>密码强度</td><td>~123 bit</td><td>用户自定义或随机生成</td></tr>
+</table>
+
+<h3>4.2 与同类确定性密码工具对比</h3>
+
+<table>
+<tr><th></th><th>99password</th><th>花密 (原版)</th><th>LessPass</th></tr>
+<tr><td>哈希算法</td><td><strong>Argon2id</strong> (RFC 9106)</td><td>HMAC-MD5</td><td>PBKDF2</td></tr>
+<tr><td>内存硬</td><td><strong>64 MB</strong></td><td>无</td><td>无</td></tr>
+<tr><td>抗 GPU</td><td><strong>强</strong></td><td>弱</td><td>弱</td></tr>
+<tr><td>输出熵</td><td>~123 bit</td><td>~80 bit</td><td>可配置</td></tr>
+<tr><td>算法标准化</td><td>RFC 9106</td><td>自定义</td><td>NIST 推荐</td></tr>
+<tr><td>离线可用</td><td>单文件</td><td>单文件</td><td>需服务器或插件</td></tr>
+</table>
+
+<h3>4.3 核心优势总结</h3>
+
+<ol>
+<li><strong>零依赖</strong>：一个 HTML 文件，双击即用，不需要服务器、数据库、浏览器插件</li>
+<li><strong>算法前沿</strong>：Argon2id 是当前最强的密码哈希算法，内存硬设计让 GPU/ASIC 攻击成本极高</li>
+<li><strong>确定性</strong>：同样输入 → 同样输出，无需备份、同步、恢复</li>
+<li><strong>完全离线</strong>：WASM 内联在 HTML 中，不联网也能用</li>
+<li><strong>透明可审计</strong>：所有代码都在一个 HTML 文件里，任何人都能审查</li>
+</ol>
+
+<!-- ==================== 局限 ==================== -->
+<h2 id="limits">五、局限与注意事项</h2>
+
+<ul>
+<li><strong>主密码是唯一命门</strong>：主密码泄露 = 所有站点密码泄露，务必使用高强度主密码</li>
+<li><strong>站点标识不可变</strong>：一旦注册时用 <code>taobao</code> 作为标识，以后也必须用 <code>taobao</code>，改了就变密码</li>
+<li><strong>无法应对站点密码策略变更</strong>：如果某网站要求特殊字符而生成的密码不含，需要单独处理</li>
+<li><strong>与 v1 不兼容</strong>：v1 (HMAC-MD5) 和 v2 (Argon2id) 生成的密码完全不同</li>
+<li><strong>没有双因素认证</strong>：单因素（主密码）保护，建议主密码足够复杂</li>
+</ul>
+
+<!-- ==================== 致敬 ==================== -->
+<h2 id="credits">六、致敬与许可</h2>
+
+<p>本项目受 <a href="https://flowerpassword.com" target="_blank" style="color:#2980b9">花密 FlowerPassword</a> 启发。花密是国内最早的确定性密码生成工具之一，由原作者于 2011 年创建，其"可记忆、无储存"的理念影响了众多后续项目。</p>
+
+<p>99password 在花密的理念基础上，将哈希算法从 HMAC-MD5 升级为 Argon2id，大幅提升了抗暴力破解能力。感谢原作者的开创性工作。</p>
+
+<p>核心库：<a href="https://github.com/nicbell/hash-wasm" target="_blank" style="color:#2980b9">hash-wasm</a> (MIT License)</p>
+
+</div>
+
+<div class="footer">
+  <p>Copyright © 2026 99password · <a href="https://flowerpassword.com" target="_blank">致敬花密 FlowerPassword</a></p>
+  <p>Hosted by <a href="https://www.cloudflare.com" target="_blank">Cloudflare Pages</a></p>
+</div>
+
+</body>
+</html>
