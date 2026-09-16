@@ -193,7 +193,6 @@ password = bytesToChars(hash, length=20)</code></pre>
 <li><strong>主密码是唯一命门</strong>：主密码泄露 = 所有站点密码泄露，务必使用高强度主密码</li>
 <li><strong>站点标识不可变</strong>：一旦注册时用 <code>taobao</code> 作为标识，以后也必须用 <code>taobao</code>，改了就变密码</li>
 <li><strong>无法应对站点密码策略变更</strong>：如果某网站要求特殊字符而生成的密码不含，需要单独处理</li>
-<li><strong>与 v1 不兼容</strong>：v1 (HMAC-MD5) 和 v2 (Argon2id) 生成的密码完全不同</li>
 <li><strong>没有双因素认证</strong>：单因素（主密码）保护，建议主密码足够复杂</li>
 </ul>
 
